@@ -1,10 +1,5 @@
-# Local spec-driven development notes for Claude Code.
-# They stay on disk and are not part of the shared repository.
+# Local operating notes for Claude Code, kept off the shared repository.
 Claude.md
-spec.md
-plan.md
-task.md
-code.md
 
 # Python
 __pycache__/
