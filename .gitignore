@@ -1,0 +1,23 @@
+# Local spec-driven development notes for Claude Code.
+# They stay on disk and are not part of the shared repository.
+Claude.md
+spec.md
+plan.md
+task.md
+code.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local tooling noise
+.DS_Store

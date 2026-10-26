@@ -1,0 +1,10 @@
+# Working set for the E1 277o DPG project.
+# Pinned loosely; a fresh virtualenv installs these.
+numpy>=1.26
+torch>=2.2
+gymnasium[box2d]>=0.29
+matplotlib>=3.8
+pyyaml>=6.0
+
+# Development only (tests). Not imported by the agents.
+pytest>=8.0
