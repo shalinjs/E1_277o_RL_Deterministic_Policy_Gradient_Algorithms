@@ -25,7 +25,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 from common.logging import read_run_csv  # noqa: E402
 
 # Environments where a lower score is better.
-LOWER_IS_BETTER = {"bandit"}
+LOWER_IS_BETTER_PREFIX = "bandit"  # bandit, bandit_m10, bandit_m25, ...
+
 
 
 def aggregate(csv_paths):
@@ -83,7 +84,7 @@ def make_plots(results_dir, out_dir):
     ) if os.path.isdir(results_dir) else []
 
     for env in envs:
-        ylabel = "cost (lower is better)" if env in LOWER_IS_BETTER else "return (higher is better)"
+        ylabel = "cost (lower is better)" if env.startswith(LOWER_IS_BETTER_PREFIX) else "return (higher is better)"
         fig, ax = plt.subplots(figsize=(7, 4.5))
         drew_any = False
         for agent in _agent_dirs(results_dir, env):

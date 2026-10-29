@@ -42,8 +42,8 @@ def test_run_help_does_not_train(capsys):
     assert "usage" in capsys.readouterr().out.lower()
 
 
-def test_make_agent_defers_to_phase_1():
+def test_make_agent_raises_for_unimplemented_agents():
     import run
 
     with pytest.raises(NotImplementedError):
-        run.make_agent("copdac_q", env=None, config={})
+        run.make_agent("stochastic_ac", env=None, config={"env": "bandit"})

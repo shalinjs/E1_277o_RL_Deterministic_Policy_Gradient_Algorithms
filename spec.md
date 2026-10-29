@@ -194,6 +194,8 @@ One CSV per run, written only by the runner:
 results/<env>/<agent>/seed<k>.csv
 ```
 
+`<env>` is `bandit_m<m>` on the bandit, so the three action dimensions do not overwrite each other. `<agent>` is `copdac_q_natural` when `natural_gradient: true`, so the two COPDAC variants stay separate. Command-line `--seed` and `--steps` override the YAML; a YAML `agent` or `env` that disagrees with the command line is an error.
+
 Columns, in order: `step`, `eval_return`, `wall_time_sec`. Extra columns are allowed after these three. `eval_return` is the bandit mean-action cost, or the mean return of evaluation episodes. The header is fixed. Nobody edits a CSV by hand.
 
 Configs live in `configs/` as YAML, one file per agent and environment that is actually run. The file used for a final run is committed next to the result.

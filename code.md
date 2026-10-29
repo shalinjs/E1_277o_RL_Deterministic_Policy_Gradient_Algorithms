@@ -90,6 +90,7 @@ class Agent(Protocol):
 6. Append one row and flush.
 
 CSV path: `results/<env>/<agent>/seed<k>.csv`.
+`<env>` is `bandit_m<m>` on the bandit, so the three action dimensions do not overwrite each other. `<agent>` is `copdac_q_natural` when `natural_gradient: true`, so the two COPDAC variants stay separate. Command-line `--seed` and `--steps` override the YAML; a YAML `agent` or `env` that disagrees with the command line is an error.
 Header starts with `step,eval_return,wall_time_sec`. `wall_time_sec` is seconds since the start of the run, measured with `time.perf_counter`.
 Optional later columns, only if the agent returned them: `q_estimate`, `rho_max`. Absent is fine. Present means finite floats.
 
@@ -147,7 +148,7 @@ If `rho_clip` is set, clip `rho` into `[0, rho_clip]` after computing it, and co
 ### COPDAC-Q, bandit
 
 `mu = theta`, Jacobian is the identity.
-Features for the regression: `(a - theta)` and a bias column. Least squares onto the observed costs every `2m` steps.
+Features for the regression: `(a - theta)` and a bias column. Least squares onto the observed rewards (`reward = -cost`) every `2m` steps. Regressing onto the cost would make `w` the cost gradient, and `theta + actor_lr * w` would then climb the cost.
 Actor, once per batch, using the fitted `w`:
 
 ```
@@ -173,6 +174,8 @@ v <- v + critic_lr * delta * phi(s)
 
 Actor, flag off: `theta <- theta + actor_lr * jacobian @ (jacobian.T @ w)`, with the product shaped so `theta` stays `(n, 1)`.
 Actor, flag on: `theta <- theta + actor_lr * w`, with `w` shaped like `theta`.
+
+`act` does not clip; the env wrapper does. If the agent clipped, `a - mu` would grow without bound once `mu` left `[-2, 2]`, and the compatible critic diverges (seen on Pendulum, 29 Oct). The critic learns `Q` of the clipped environment instead, which is flat outside the bounds.
 
 The advantage of `a = mu(s)` is zero. The bootstrap in the TD target uses `mu(next)`, not the behaviour action. This is the whole of the off-policy deterministic update.
 

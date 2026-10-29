@@ -48,6 +48,7 @@ Dates follow the 24 Oct 2026 plan. The repo was empty on 26 Oct, so Phase 0 is s
 - [ ] **T1.2** B. COPDAC-Q on the same bandit, `m = 10`, seed 0. Natural-gradient flag off.
   Needs: T0.3, T1.1.
   Done when: its final mean-action cost is lower than T1.1 on the same seed, and the mean has moved toward 4.
+  Progress (29 Oct): `agents/copdac_q.py`, `tests/test_copdac_q.py`, `configs/bandit_copdac_q_m{10,25,50}.yaml`; `run.py` wired (registry, bandit/gym evaluation, CSV + resolved YAML, `tests/test_run_cli.py`). `python run.py --agent copdac_q --env bandit --seed 0 --steps 10000 --config configs/bandit_copdac_q_m10.yaml` -> mean-action cost 158.9 -> 0.0011, mean theta 4.00. Open: compare against T1.1 once Stochastic AC lands.
 
 - [ ] **T1.3** C. DDPG on Pendulum, seed 0, 50,000 steps, hyperparameters from `spec.md` section 3. TD3 flags off.
   Needs: T0.5.

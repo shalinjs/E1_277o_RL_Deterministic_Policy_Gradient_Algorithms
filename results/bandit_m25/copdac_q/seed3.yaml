@@ -1,0 +1,11 @@
+agent: copdac_q
+env: bandit
+seed: 3
+steps: 10000
+gamma: 0.99
+action_dim: 25
+eval_every: 50
+batch_size: 50
+actor_lr: 0.1
+sigma_beta: 0.1
+natural_gradient: false
