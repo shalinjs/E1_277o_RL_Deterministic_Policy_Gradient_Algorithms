@@ -1,0 +1,10 @@
+agent: stochastic_ac
+env: bandit
+seed: 1
+steps: 10000
+gamma: 0.99
+action_dim: 50
+eval_every: 100
+batch_size: 100
+actor_lr: 0.05
+init_log_std: 0.0

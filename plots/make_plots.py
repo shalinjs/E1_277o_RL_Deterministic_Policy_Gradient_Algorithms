@@ -11,9 +11,16 @@ from __future__ import annotations
 import argparse
 import glob
 import os
+import sys
 import tempfile
 
 import numpy as np
+
+# Allow both `python -m plots.make_plots` and `python plots/make_plots.py` by
+# putting the repository root on the path before importing the project packages.
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 # Matplotlib needs a writable config dir and a non-interactive backend.
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "mplconfig_dpg"))
@@ -75,8 +82,16 @@ def _agent_dirs(results_dir, env):
     )
 
 
-def make_plots(results_dir, out_dir):
-    """Walk the results tree and write one learning-curve PNG per environment."""
+LOG_BAND_FLOOR = 1e-6  # lower edge of the std band on a log axis (cost >= 0)
+
+
+def make_plots(results_dir, out_dir, log_y=False):
+    """Walk the results tree and write one learning-curve PNG per environment.
+
+    ``log_y`` draws the y-axis on a log scale, useful on the bandit where cost
+    spans several orders of magnitude; the std band's lower edge is clamped to a
+    small positive floor so the band stays drawable.
+    """
     os.makedirs(out_dir, exist_ok=True)
     written = []
     envs = sorted(
@@ -92,12 +107,16 @@ def make_plots(results_dir, out_dir):
             if not csvs:
                 continue
             steps, mean, std = aggregate(csvs)
+            lower = np.clip(mean - std, LOG_BAND_FLOOR, None) if log_y else mean - std
             ax.plot(steps, mean, label=f"{agent} (n={len(csvs)})")
-            ax.fill_between(steps, mean - std, mean + std, alpha=0.2)
+            ax.fill_between(steps, lower, mean + std, alpha=0.2)
             drew_any = True
         if not drew_any:
             plt.close(fig)
             continue
+        if log_y:
+            ax.set_yscale("log")
+            ylabel += ", log scale"
         ax.set_xlabel("environment steps")
         ax.set_ylabel(ylabel)
         ax.set_title(env)
@@ -114,12 +133,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate DPG learning-curve plots.")
     parser.add_argument("--results-dir", default="results")
     parser.add_argument("--out-dir", default="plots/out")
+    parser.add_argument("--log-y", action="store_true", help="log-scale y-axis (good for the bandit)")
     return parser
 
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    written = make_plots(args.results_dir, args.out_dir)
+    written = make_plots(args.results_dir, args.out_dir, log_y=args.log_y)
     for path in written:
         print(f"wrote {path}")
 

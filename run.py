@@ -101,6 +101,10 @@ def make_agent(agent_name: str, env, config: dict):
         from agents.copdac_q import make_copdac_q
 
         return make_copdac_q(env_name, env, config)
+    if agent_name == "stochastic_ac":
+        from agents.stochastic_ac import make_stochastic_ac
+
+        return make_stochastic_ac(env_name, env, config)
     raise NotImplementedError(f"agent '{agent_name}' is not implemented yet")
 
 

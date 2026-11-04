@@ -41,14 +41,16 @@ Dates follow the 24 Oct 2026 plan. The repo was empty on 26 Oct, so Phase 0 is s
 
 ## Phase 1 — algorithms and sanity checks (27–29 Oct)
 
-- [ ] **T1.1** A. Stochastic Actor-Critic on the bandit, `m = 10`, seed 0, 10,000 steps. Batch size `2m`. Least-squares critic. One actor step per batch.
+- [x] **T1.1** A. Stochastic Actor-Critic on the bandit, `m = 10`, seed 0, 10,000 steps. Batch size `2m`. Least-squares critic. One actor step per batch.
   Needs: T0.3.
   Done when: mean-action cost falls across the run and the final mean is closer to 4 than the start at 0. Log CSV is written.
+  Done (4 Nov): `agents/stochastic_ac.py` (Gaussian policy `N(theta, exp(2y) I)`, analytic scores `(a-mu)/var` and `||a-mu||^2/var - k`, compatible critic least-squares-fit every 2m steps with the bias column as the baseline, one actor step per batch; plus a linear/Pendulum TD mode), `tests/test_stochastic_ac.py`, `configs/bandit_stochastic_ac_m10.yaml` (seed-0 actor_lr sweep recorded), `run.py` registry wired, `tests/test_imports.py` updated. `python run.py --agent stochastic_ac --env bandit --seed 0 --steps 10000 --config configs/bandit_stochastic_ac_m10.yaml` -> mean-action cost 128.7 -> 2.1e-5, mean theta -> 4.00; CSV at `results/bandit_m10/stochastic_ac/seed0.csv`. `pytest -q` -> 74 passed.
 
 - [ ] **T1.2** B. COPDAC-Q on the same bandit, `m = 10`, seed 0. Natural-gradient flag off.
   Needs: T0.3, T1.1.
   Done when: its final mean-action cost is lower than T1.1 on the same seed, and the mean has moved toward 4.
-  Progress (29 Oct): `agents/copdac_q.py`, `tests/test_copdac_q.py`, `configs/bandit_copdac_q_m{10,25,50}.yaml`; `run.py` wired (registry, bandit/gym evaluation, CSV + resolved YAML, `tests/test_run_cli.py`). `python run.py --agent copdac_q --env bandit --seed 0 --steps 10000 --config configs/bandit_copdac_q_m10.yaml` -> mean-action cost 158.9 -> 0.0011, mean theta 4.00. Open: compare against T1.1 once Stochastic AC lands.
+  Progress (29 Oct, reviewed 4 Nov): `agents/copdac_q.py` (identity-Jacobian bandit mode + incremental-TD linear mode, natural-gradient flag), `tests/test_copdac_q.py`, `configs/bandit_copdac_q_m{10,25,50}.yaml` (seed-0 step-size sweep recorded); `run.py` wired (registry has `copdac_q` only; bandit mean-action eval; Gymnasium eval on a separate env; CSV + resolved YAML; `tests/test_run_cli.py`). Contract fixes in `code.md`/`spec.md`: bandit critic regresses onto rewards (not costs), and the agent does not clip — the env wrapper does. Seed-0 final mean-action cost 0.0011 (m=10), mean theta -> 4.00, cost fell from ~159.
+  Update (4 Nov): T1.1 has landed, so the comparison can now be made — but the done-when as written is NOT met at m=10 seed 0: COPDAC-Q (0.0011) is not lower than Stochastic AC (2.1e-5). The paper's substantive claim still holds at higher dimension: COPDAC-Q beats Stochastic AC at m=25 (0.016 vs ~0.30) and m=50 (0.087 vs ~5.4). Stochastic AC's m=10 edge comes partly from its policy std collapsing near the clamp at actor_lr=0.05. Member B to decide: re-word the done-when to compare across the grid, change the operating point, or accept the m=10 result. Box left unchecked pending that call.
 
 - [ ] **T1.3** C. DDPG on Pendulum, seed 0, 50,000 steps, hyperparameters from `spec.md` section 3. TD3 flags off.
   Needs: T0.5.
@@ -63,10 +65,12 @@ Dates follow the 24 Oct 2026 plan. The repo was empty on 26 Oct, so Phase 0 is s
 - [ ] **T2.1** A and B. Bandit, `m in {10, 25, 50}`, seeds 0–4, Stochastic Actor-Critic and COPDAC-Q. Step sizes chosen from a seed-0 sweep of 3 or 4 values, sweep recorded in the config.
   Needs: T1.1, T1.2.
   Done when: 30 CSVs exist (2 agents × 3 dimensions × 5 seeds) and the plot script draws them.
+  Progress (29 Oct, updated 4 Nov): COPDAC-Q half done — 15 CSVs under `results/bandit_m{10,25,50}/copdac_q/` (seeds 0–4), seed-0 step-size sweep recorded in the configs; `plots/make_plots.py` draws `bandit_m*` on the cost axis. Seed-0 finals: 0.0011 (m=10), 0.016 (m=25), 0.087 (m=50). Stochastic Actor-Critic half: unblocked now that T1.1 has landed; `bandit_stochastic_ac_m10.yaml` and `results/bandit_m10/stochastic_ac/seed0.csv` exist. Still needed: m=25/50 configs (each with its own seed-0 actor_lr sweep) and seeds 0–4 for all three dimensions (15 CSVs).
 
 - [ ] **T2.2** B. Natural-gradient COPDAC on that same bandit grid, 5 seeds, flag on, critic unchanged.
   Needs: T1.2.
   Done when: 15 CSVs exist and the run does not emit NaN.
+  Note (4 Nov): not run yet — no `results/*/copdac_q_natural/`. The `natural_gradient` flag and the `copdac_q_natural` output path are already implemented in `agents/copdac_q.py` and `run.py`; this task just needs the 15 runs (set `natural_gradient: true` in the configs).
 
 - [ ] **T2.3** A. Optional gradient-variance figure: 100 gradient estimates at one fixed parameter, both linear methods, at least at `m = 10` and `m = 50`.
   Needs: T1.1, T1.2.

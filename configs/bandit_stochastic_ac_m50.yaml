@@ -1,0 +1,16 @@
+# Stochastic Actor-Critic (Gaussian) on the quadratic bandit, m = 50
+# (spec.md 1.2, paper section 5.1). On-policy baseline: no sigma_beta, no critic_lr.
+agent: stochastic_ac
+env: bandit
+seed: 0            # overridden by --seed
+steps: 10000
+gamma: 0.99        # unused on the bandit (one-step cost)
+action_dim: 50
+eval_every: 100    # one evaluation per batch of 2m steps
+batch_size: 100    # critic least-squares refit every 2m steps
+actor_lr: 0.05
+init_log_std: 0.0  # start at std = 1
+# Sweep, seed 0, 10,000 steps, final mean-action cost (init_log_std = 0):
+#   actor_lr 0.01 -> 35.3, 0.02 -> 18.8, 0.03 -> 12.4, 0.05 -> 5.42
+#   0.1 -> 0.70 but drives the policy std toward the clamp floor (degenerate).
+#   0.05 matches the COPDAC-Q lr for a like-for-like comparison.
