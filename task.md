@@ -49,12 +49,13 @@ Dates follow the 24 Oct 2026 plan. The repo was empty on 26 Oct, so Phase 0 is s
 - [ ] **T1.2** B. COPDAC-Q on the same bandit, `m = 10`, seed 0. Natural-gradient flag off.
   Needs: T0.3, T1.1.
   Done when: its final mean-action cost is lower than T1.1 on the same seed, and the mean has moved toward 4.
-  Progress (29 Oct, reviewed 4 Nov): `agents/copdac_q.py` (identity-Jacobian bandit mode + incremental-TD linear mode, natural-gradient flag), `tests/test_copdac_q.py`, `configs/bandit_copdac_q_m{10,25,50}.yaml` (seed-0 step-size sweep recorded); `run.py` wired (registry has `copdac_q` only; bandit mean-action eval; Gymnasium eval on a separate env; CSV + resolved YAML; `tests/test_run_cli.py`). Contract fixes in `code.md`/`spec.md`: bandit critic regresses onto rewards (not costs), and the agent does not clip — the env wrapper does. Seed-0 final mean-action cost 0.0011 (m=10), mean theta -> 4.00, cost fell from ~159.
+  Progress (29 Oct, reviewed 4 Nov): `agents/copdac_q.py` (identity-Jacobian bandit mode + incremental-TD linear mode, natural-gradient flag), `tests/test_copdac_q.py`, `configs/bandit_copdac_q_m{10,25,50}.yaml` (seed-0 step-size sweep recorded); `run.py` wired for `copdac_q` and, since T1.1, `stochastic_ac` (bandit mean-action eval; Gymnasium eval on a separate env; CSV + resolved YAML; `tests/test_run_cli.py`). Contract fixes in `code.md`/`spec.md`: bandit critic regresses onto rewards (not costs), and the agent does not clip — the env wrapper does. Seed-0 final mean-action cost 0.0011 (m=10), mean theta -> 4.00, cost fell from ~159.
   Update (4 Nov): T1.1 has landed and the full 5-seed grid + plots (see T2.1) now make the comparison concrete. The done-when as written is NOT met at m=10 seed 0: COPDAC-Q (0.0011) is not lower than Stochastic AC (2.1e-5). But the paper's substantive claim holds and grows with dimension — seed-aggregated finals COPDAC-Q vs Stochastic AC: m=25 0.016 vs ~0.9, m=50 0.087 vs ~6 (see `plots/out/bandit_m{25,50}_learning_curve.png`). Stochastic AC's m=10 edge comes partly from its policy std collapsing near the clamp. Member B to decide: re-word the done-when to compare across the grid, change the operating point, or accept the m=10 result. Box left unchecked pending that call.
 
 - [ ] **T1.3** C. DDPG on Pendulum, seed 0, 50,000 steps, hyperparameters from `spec.md` section 3. TD3 flags off.
   Needs: T0.5.
   Done when: an evaluation return of about −200 or better appears in the CSV.
+  Note (11 Nov, `da62413`): not this commit. `agents/ddpg_td3.py` is still the flag stub, and `make_agent("ddpg")` still raises NotImplementedError. No Pendulum CSV. The commit only adds runner groundwork the later LunarLander runs use: the first `reset` takes the run seed, and a DDPG run writes `seed<k>_episodes.csv` (`common/runner.py`, `common/logging.py` `EpisodeLogger`, `run.py`).
 
 - [ ] **T1.4** All. Read another member's module against `code.md`. Note mismatches as unchecked bugs under this task. Fix only interface and logging mismatches, not their algorithm.
   Needs: T1.1, T1.2, T1.3.
@@ -83,6 +84,7 @@ Dates follow the 24 Oct 2026 plan. The repo was empty on 26 Oct, so Phase 0 is s
 - [ ] **T2.5** C. TD3 flags on the DDPG class. Pendulum, seeds 0–4, DDPG and TD3, identical hyperparameters apart from the three flags.
   Needs: T1.3.
   Done when: 10 CSVs exist. TD3 also clears the −200 sanity bar on seed 0.
+  Note (11 Nov, `da62413`): no Pendulum DDPG or TD3 CSVs in this commit. TD3-only keys in `configs/lunarlander_ddpg.yaml` are commented out. Blocked on T1.3.
 
 - [ ] **T2.6** A and B. Pendulum step-size sweep, seed 0 only, for the linear agents that are still candidates.
   Needs: T0.4, T1.1, T1.2.
@@ -105,10 +107,12 @@ Dates follow the 24 Oct 2026 plan. The repo was empty on 26 Oct, so Phase 0 is s
 - [ ] **T3.4** C. LunarLander, DDPG against TD3, seeds 0–4, about 300,000 steps. If one run exceeds 1.5 hours, switch the config to 200,000 and say so.
   Needs: T2.5.
   Done when: 10 CSVs exist, or fewer with a written reason that names the failed seed.
+  Progress (11 Nov, `da62413`, on behalf of sanjana2@iisc.ac.in): analysis and write-up only, not the 10 CSVs. `reports/ddpg_td3_lunarlander_research_findings.md` describes six 200,000-step evaluation runs (seeds 0–2 each; TD3 seed 2 is `comparison_seed2_rerun`, the interrupted seed-2 run is excluded). Reported mean final reward: TD3 64.68, DDPG −34.05. Scripts: `compare_ddpg_td3.py`, `analyze_td3_critics.py`, `analyze_td3_common_dataset.py`. Config: `configs/lunarlander_ddpg.yaml` (300,000 steps; TD3 noise and delay commented out). `pandas` added to `requirements.txt`. The evaluation CSVs, episode logs, checkpoints, and plots the report links under `results/lunarlander_ddpg_td3_comparison_3seeds_200k/` are not in the tree, and this repo still cannot train `ddpg` or `td3`. Box left unchecked: five seeds were not run, the 200,000-step budget is not tied to a named run that exceeded 1.5 hours, and the fewer CSVs are not committed.
 
 - [ ] **T3.5** C. TD3 ablation on Pendulum, seed 0: the three flags turned off one at a time. This is a backup-slide figure, not a new algorithm.
   Needs: T2.5.
   Done when: four CSVs (full TD3 plus three leave-one-out runs) exist, or the task is waived in the note because LunarLander consumed the time.
+  Note (11 Nov, `da62413`): not waived. The LunarLander report does not include the leave-one-out Pendulum runs.
 
 ## Freeze (5 Nov)
 
