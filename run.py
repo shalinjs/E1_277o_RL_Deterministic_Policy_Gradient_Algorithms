@@ -89,7 +89,6 @@ def make_env(env_name: str, seed: int, config: dict):
     from common.wrappers import ClipAction
 
     env = gymnasium.make(GYM_ENV_IDS[env_name])
-    env.reset(seed=seed)
     env.action_space.seed(seed)
     return ClipAction(env)
 
@@ -162,7 +161,7 @@ def main(argv=None, results_root: str = "results") -> int:
 
     import yaml
 
-    from common.logging import RunLogger
+    from common.logging import RunLogger, EpisodeLogger
     from common.runner import run_training
 
     csv_path, yaml_path = results_paths(config, results_root)
@@ -171,16 +170,32 @@ def main(argv=None, results_root: str = "results") -> int:
         yaml.safe_dump(config, handle, sort_keys=False)
 
     start = time.perf_counter()
+    episode_csv_path = os.path.splitext(csv_path)[0] + "_episodes.csv"
     with RunLogger(csv_path) as logger:
-        run_training(
-            env,
-            agent,
-            logger,
-            steps=args.steps,
-            eval_every=int(config["eval_every"]),
-            evaluate_fn=evaluate_fn,
-            start_time=start,
-        )
+        if args.agent == "ddpg":
+            with EpisodeLogger(episode_csv_path) as episode_logger:
+                run_training(
+                    env,
+                    agent,
+                    logger,
+                    steps=args.steps,
+                    eval_every=int(config["eval_every"]),
+                    seed=args.seed,
+                    evaluate_fn=evaluate_fn,
+                    start_time=start,
+                    episode_logger=episode_logger,
+                )
+        else:
+            run_training(
+                env,
+                agent,
+                logger,
+                steps=args.steps,
+                eval_every=int(config["eval_every"]),
+                seed=args.seed,
+                evaluate_fn=evaluate_fn,
+                start_time=start,
+            )
     print(f"wrote {csv_path} ({time.perf_counter() - start:.1f}s)")
     return 0
 

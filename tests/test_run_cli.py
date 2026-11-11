@@ -43,6 +43,34 @@ def test_config_that_disagrees_with_cli_is_rejected(tmp_path):
         _main(tmp_path, str(cfg))
 
 
+def test_gym_environment_is_not_reset_during_construction(monkeypatch):
+    import gymnasium
+
+    class ActionSpace:
+        def __init__(self):
+            self.seeds = []
+
+        def seed(self, seed):
+            self.seeds.append(seed)
+
+    class Environment:
+        def __init__(self):
+            self.action_space = ActionSpace()
+            self.observation_space = object()
+            self.reset_calls = []
+
+        def reset(self, **kwargs):
+            self.reset_calls.append(kwargs)
+
+    base_env = Environment()
+    monkeypatch.setattr(gymnasium, "make", lambda _: base_env)
+
+    env = run.make_env("lunarlander", 23, {})
+
+    assert env.reset_calls == []
+    assert base_env.action_space.seeds == [23]
+
+
 def test_pendulum_evaluation_runs_episodes(tmp_path):
     cfg = dict(agent="copdac_q", env="pendulum", seed=0, actor_lr=1e-4, critic_lr=1e-3,
                sigma_beta=1.0, centres_per_dim=5, eval_episodes=1)

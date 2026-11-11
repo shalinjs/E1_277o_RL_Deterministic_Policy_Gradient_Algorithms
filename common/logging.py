@@ -67,3 +67,59 @@ def read_run_csv(path: str) -> dict[str, np.ndarray]:
     columns = {name: np.array([float(r[i]) for r in rows]) for i, name in enumerate(header)}
     columns["step"] = columns["step"].astype(int)
     return columns
+
+class EpisodeLogger:
+    """Write one row for every completed training episode."""
+
+    COLUMNS = (
+        "episode",
+        "step",
+        "reward",
+        "length",
+        "terminated",
+        "truncated",
+        "final_step_reward",
+    )
+
+    def __init__(self, path: str):
+        self.path = path
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        self._file = open(path, "w", newline="")
+        self._writer = csv.writer(self._file)
+        self._writer.writerow(self.COLUMNS)
+        self._file.flush()
+
+    def log(
+        self,
+        episode: int,
+        step: int,
+        reward: float,
+        length: int,
+        terminated: bool,
+        truncated: bool,
+        final_step_reward: float,
+    ) -> None:
+        values = (reward, final_step_reward)
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError(f"non-finite episode value written to {self.path}")
+
+        self._writer.writerow((
+            int(episode),
+            int(step),
+            float(reward),
+            int(length),
+            bool(terminated),
+            bool(truncated),
+            float(final_step_reward),
+        ))
+        self._file.flush()
+
+    def close(self) -> None:
+        if not self._file.closed:
+            self._file.close()
+
+    def __enter__(self) -> "EpisodeLogger":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()

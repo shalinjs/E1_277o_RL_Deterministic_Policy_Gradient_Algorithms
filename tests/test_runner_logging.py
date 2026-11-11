@@ -68,8 +68,10 @@ class _ScriptedEnv:
     def __init__(self, schedule):
         self.schedule = schedule
         self.calls = 0
+        self.reset_calls = []
 
     def reset(self, **kwargs):
+        self.reset_calls.append(kwargs)
         return np.zeros(1), {}
 
     def step(self, action):
@@ -90,6 +92,7 @@ def test_runner_done_ignores_truncation(tmp_path):
             logger,
             steps=4,
             eval_every=2,
+            seed=0,
             evaluate_fn=lambda a: 0.0,
             start_time=time.perf_counter(),
         )
@@ -103,7 +106,43 @@ def test_runner_logs_on_schedule(tmp_path):
     path = tmp_path / "run.csv"
     with RunLogger(str(path)) as logger:
         run_training(
-            env, agent, logger, steps=4, eval_every=2, evaluate_fn=lambda a: 1.0
+            env, agent, logger, steps=4, eval_every=2, seed=0, evaluate_fn=lambda a: 1.0
         )
     data = read_run_csv(str(path))
     np.testing.assert_array_equal(data["step"], [2, 4])
+
+
+def test_runner_uses_seeded_initial_reset_reproducibly(tmp_path):
+    class SeededEnv(_ScriptedEnv):
+        def reset(self, **kwargs):
+            self.reset_calls.append(kwargs)
+            state = np.random.default_rng(kwargs["seed"]).normal(size=1)
+            return state, {}
+
+    class RecordingAgent(_CountingAgent):
+        def __init__(self):
+            super().__init__()
+            self.initial_states = []
+
+        def act(self, state, explore=True):
+            self.initial_states.append(np.array(state, copy=True))
+            return np.zeros(1)
+
+    initial_states = []
+    for run_index in range(2):
+        env = SeededEnv([(False, False)])
+        agent = RecordingAgent()
+        with RunLogger(str(tmp_path / f"run{run_index}.csv")) as logger:
+            run_training(
+                env,
+                agent,
+                logger,
+                steps=1,
+                eval_every=2,
+                seed=23,
+                evaluate_fn=lambda _: 0.0,
+            )
+        assert env.reset_calls == [{"seed": 23}]
+        initial_states.append(agent.initial_states[0])
+
+    np.testing.assert_array_equal(initial_states[0], initial_states[1])
