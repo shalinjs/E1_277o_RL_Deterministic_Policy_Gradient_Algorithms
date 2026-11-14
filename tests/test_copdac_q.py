@@ -1,11 +1,10 @@
-"""T1.2: COPDAC-Q on the bandit and the incremental (Pendulum) updates of eqs. 19--22."""
+"""T1.2: COPDAC-Q on the bandit (batch form of eqs. 19--22, identity Jacobian)."""
 
 import numpy as np
 import pytest
 
-from agents.copdac_q import CopdacQ, make_copdac_q
+from agents.copdac_q import make_copdac_q
 from envs.bandit import QuadraticBandit
-from features.rbf import feature_dim, pendulum_phi
 
 
 def _run_bandit(agent, env, steps):
@@ -64,72 +63,41 @@ def test_bandit_critic_recovers_reward_gradient():
     np.testing.assert_allclose(agent.v, [7.0], atol=1e-8)
 
 
-def _linear_agent(natural):
-    n = feature_dim(5)
-    return CopdacQ(
-        1, mode="linear", actor_lr=0.01, critic_lr=0.1, sigma_beta=0.5, seed=0,
-        gamma=0.9, natural_gradient=natural,
-        feature_fn=lambda s: pendulum_phi(s, centres_per_dim=5), feature_dim=n,
-    )
+def test_natural_gradient_flag_matches_the_ordinary_bandit_step():
+    plain, env = _bandit_agent(m=3, natural_gradient=False)
+    natural, _ = _bandit_agent(m=3, natural_gradient=True)
+    obs, _ = env.reset()
+    for _ in range(plain.batch_size):
+        a = plain.act(obs)
+        reward = -env.cost(a)
+        plain.update(obs, a, reward, obs, False)
+        natural.update(obs, a, reward, obs, False)
+    np.testing.assert_allclose(natural.theta, plain.theta)
+    np.testing.assert_allclose(natural.w, plain.w)
+    assert natural.natural_gradient and not plain.natural_gradient
 
 
-def test_linear_update_matches_equations_19_to_22():
-    agent = _linear_agent(natural=False)
-    rng = np.random.default_rng(1)
-    agent.theta = rng.normal(size=agent.theta.shape) * 0.1
-    agent.w = rng.normal(size=agent.w.shape) * 0.1
-    agent.v = rng.normal(size=agent.v.shape) * 0.1
-    th, w, v = agent.theta.copy(), agent.w.copy(), agent.v.copy()
-
-    s, s2 = np.array([0.6, 0.8, 1.0]), np.array([0.0, 1.0, -2.0])
-    a, r = np.array([0.7]), -3.0
-    phi, phi2 = pendulum_phi(s, 5), pendulum_phi(s2, 5)
-    phi_sa = phi[:, None] * (a - phi @ th)
-    delta = r + 0.9 * (phi2 @ v) - (np.sum(phi_sa * w) + phi @ v)
-
-    agent.update(s, a, r, s2, False)
-    np.testing.assert_allclose(agent.theta, th + 0.01 * phi[:, None] * (phi @ w))
-    np.testing.assert_allclose(agent.w, w + 0.1 * delta * phi_sa)
-    np.testing.assert_allclose(agent.v, v + 0.1 * delta * phi)
-
-
-def test_natural_gradient_flag_changes_actor_only():
-    plain, natural = _linear_agent(False), _linear_agent(True)
-    w = np.random.default_rng(2).normal(size=plain.w.shape)
-    plain.w, natural.w = w.copy(), w.copy()
-    s = np.array([1.0, 0.0, 0.5])
-    plain.update(s, np.array([0.3]), -1.0, s, False)
-    natural.update(s, np.array([0.3]), -1.0, s, False)
-    np.testing.assert_allclose(natural.theta, 0.01 * w)
-    assert not np.allclose(plain.theta, natural.theta)
-    np.testing.assert_allclose(plain.w, natural.w)
-    np.testing.assert_allclose(plain.v, natural.v)
-
-
-def test_done_drops_bootstrap():
-    a1, a2 = _linear_agent(False), _linear_agent(False)
-    a1.v[:] = a2.v[:] = 1.0
-    s = np.array([1.0, 0.0, 0.0])
-    a1.update(s, np.array([0.0]), 0.0, s, True)
-    a2.update(s, np.array([0.0]), 0.0, s, False)
-    assert not np.allclose(a1.v, a2.v)
-
-
-def test_compatible_feature_stays_bounded_when_mean_leaves_range():
-    # The agent does not clip, so (a - mu) is pure exploration noise even if mu is huge.
-    agent = _linear_agent(False)
-    agent.theta[:] = 100.0
-    s = np.array([1.0, 0.0, 0.0])
-    a = agent.act(s)
-    assert np.isfinite(a).all()
-    assert abs(a[0] - agent.mu(s)[0]) < 10 * agent.sigma_beta
+def test_act_does_not_clip_a_large_mean():
+    agent, _ = _bandit_agent()
+    agent.theta = np.full(agent.action_dim, 100.0)
+    np.testing.assert_array_equal(agent.act(None, explore=False), agent.theta)
 
 
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
-def test_divergence_is_loud():
-    agent = _linear_agent(False)
+def test_nonfinite_reward_is_loud():
+    agent, _ = _bandit_agent(m=3)
     with pytest.raises(FloatingPointError):
-        agent.update(np.array([1.0, 0.0, 0.0]), np.array([0.0]), np.inf, np.array([1.0, 0.0, 0.0]), False)
+        for _ in range(agent.batch_size):
+            a = agent.act(None)
+            agent.update(None, a, np.inf, None, False)
+
+
+def test_factory_rejects_a_non_bandit_env():
+    with pytest.raises(ValueError):
+        make_copdac_q(
+            "lunarlander", None,
+            {"action_dim": 2, "actor_lr": 0.01, "sigma_beta": 0.1, "seed": 0},
+        )
 
 
 def test_save_load_roundtrip(tmp_path):

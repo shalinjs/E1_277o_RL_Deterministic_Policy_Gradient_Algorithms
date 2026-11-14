@@ -42,26 +42,11 @@ The bandit's orthogonal matrix and diagonal are drawn from `numpy.random.default
 - `info["mean_cost"]` is the cost of the current policy mean, supplied by the runner rather than the env. The env itself only knows the action it was given. The runner evaluates the mean action in a separate call and writes that cost to the CSV. Do not score the exploratory action in `eval_return`.
 - `C` is built as `Q @ diag(d) @ Q.T` with `d[i]` in `{0.1, 1}` and `Q` from the QR decomposition of a Gaussian matrix, with signs fixed so the diagonal of `R` is positive.
 
-Pendulum and LunarLander are constructed in `run.py` via `gymnasium.make`. A thin wrapper clips actions to `action_space` before `step`, for every agent. The wrapper does not change rewards.
+The bandit policy mean is `theta` itself, shape `(m,)`. There is no feature map.
+
+LunarLander is constructed in `run.py` via `gymnasium.make`. A thin wrapper clips actions to `action_space` before `step`, for every agent. The wrapper does not change rewards.
 
 Time-limit truncation: pass `done = terminated` into `update`. A `truncated` transition still bootstraps.
-
-## Features
-
-`features/rbf.py`:
-
-```python
-def pendulum_phi(state: np.ndarray) -> np.ndarray:
-    """Map Pendulum observation (cos, sin, angular velocity) to a fixed RBF vector."""
-```
-
-- Centres: a regular grid, 6 centres per dimension unless the config sets `centres_per_dim` to 5 or 7.
-- Angular-velocity centres span the Pendulum observation bound for that coordinate.
-- Width: median distance between neighbouring centres along one axis, shared across axes after each axis is scaled to about `[-1, 1]`.
-- Include a constant `1` bias coordinate at the end.
-- Pure function. No state, no fitting.
-
-The bandit does not use this function. Its feature for a linear policy mean is the identity: `mu = theta`, shape `(m,)`.
 
 ## Agent interface
 
@@ -75,6 +60,7 @@ class Agent(Protocol):
 
 `act` returns shape `(m,)` float64 or float32, finite. `explore=False` returns the Gaussian mean or `mu_theta(s)`, with no noise added.
 `update` may learn zero times or many times. It must not call the environment.
+`act` does not clip. The LunarLander wrapper does.
 
 `save` writes one file (NumPy `.npz` for linear agents, `torch.save` for the neural agent). `load` restores every learned array, including target networks and the log-standard-deviation. It does not restore the replay buffer.
 
@@ -86,7 +72,7 @@ class Agent(Protocol):
 2. `set_seed`.
 3. Build env and agent.
 4. For each step: `act`, clip, `step`, `update`.
-5. On the evaluation schedule, call `act(..., explore=False)` for the bandit mean cost, or run the configured number of evaluation episodes (default 5) for Gymnasium envs with exploration off.
+5. On the evaluation schedule, call `act(..., explore=False)` for the bandit mean cost, or run the configured number of evaluation episodes (default 5) for LunarLander with exploration off.
 6. Append one row and flush.
 
 CSV path: `results/<env>/<agent>/seed<k>.csv`.
@@ -98,20 +84,21 @@ Evaluation schedule: every `eval_every` steps from the config. Default 5,000. Ba
 
 The runner writes the resolved config to `results/<env>/<agent>/seed<k>.yaml` so the YAML that was actually used sits next to the CSV.
 
+Environment names accepted by `run.py`: `bandit`, `lunarlander`.
+
 ## Config keys
 
 Required in every YAML: `agent`, `env`, `seed`, `steps`, `gamma`, `eval_every`.
 
 Bandit also requires `action_dim`.
-Linear agents also require `actor_lr`, and either `critic_lr` or, for the bandit batch critic, nothing beyond the batch regression (no step size). Use `critic_lr` on Pendulum.
-COPDAC and OffPAC require `sigma_beta`.
-OffPAC may set `rho_clip: 10` or omit it. Omitting means no clip.
+Linear agents require `actor_lr`. The bandit batch critic has no step size.
+COPDAC requires `sigma_beta`.
 DDPG and TD3 require the table in `spec.md` section 3: `actor_lr`, `critic_lr`, `batch_size`, `buffer_size`, `tau`, `exploration_std`, `warmup_steps`, `hidden_size`.
 TD3 adds `policy_delay`, `target_noise_std`, `target_noise_clip`. A DDPG YAML must not set those; the constructor forces them off.
 
 ## Updates to implement literally
 
-Shapes are for the batch of one transition unless noted. `gamma` is 0.99 on Pendulum and LunarLander. The bandit is a one-step cost; the batch critic regresses onto the immediate cost, not a return.
+Shapes are for the batch of one transition unless noted. `gamma` is 0.99 on LunarLander. The bandit is a one-step cost; the batch critic regresses onto the immediate reward, not a return.
 
 ### Stochastic Actor-Critic, bandit
 
@@ -119,31 +106,7 @@ Policy `Normal(theta, exp(y) * I)`. Compatible features for the joint parameter 
 Every `2m` steps, solve least squares for the critic weights on the batch. One actor step uses that critic as `Q` in the stochastic policy gradient, averaged over the batch.
 Score for the mean: `(a - theta) / var`. Implement the variance derivative with the same care: it is the derivative of `log pi` with respect to `y`, not a finite difference.
 
-### Stochastic Actor-Critic, Pendulum
-
-```
-delta = r + gamma * V(next) * (1 - done) - V(state)
-v <- v + critic_lr * delta * phi(state)
-theta <- theta + actor_lr * delta * grad_theta log pi
-y <- y + actor_lr * delta * grad_y log pi
-```
-
-`log_std` is clamped to a wide finite interval, for example `[-20, 2]`, so `exp(y)` cannot overflow. Record the clamp in the module docstring. This is a numerical guard, not a change of algorithm.
-
-### OffPAC
-
-Behaviour samples `a ~ Normal(mu_theta(s), sigma_beta^2 I)`.
-Target density `pi` is the Gaussian whose mean and log-std are the learned actor, evaluated at the behaviour action.
-
-```
-rho = pi(a|s) / beta(a|s)
-delta = r + gamma * V(next) * (1 - done) - V(state)
-v <- v + critic_lr * rho * delta * phi(state)
-theta <- theta + actor_lr * rho * delta * grad_theta log pi(a|s)
-y <- y + actor_lr * rho * delta * grad_y log pi(a|s)
-```
-
-If `rho_clip` is set, clip `rho` into `[0, rho_clip]` after computing it, and count how many steps clipped. A run that clips on more than a few percent of steps is a result to report, not a silent success.
+`log_std` is clamped to a wide finite interval, `[-20, 2]`, so `exp(y)` cannot overflow. Record the clamp in the module docstring. This is a numerical guard, not a change of algorithm.
 
 ### COPDAC-Q, bandit
 
@@ -152,32 +115,12 @@ Features for the regression: `(a - theta)` and a bias column. Least squares onto
 Actor, once per batch, using the fitted `w`:
 
 ```
-theta <- theta + actor_lr * w          # if natural_gradient
-theta <- theta + actor_lr * (Jacobian @ (Jacobian.T @ w))   # otherwise
+theta <- theta + actor_lr * w
 ```
 
-With the identity Jacobian the ordinary update is `theta <- theta + actor_lr * w`. On the bandit the two flags therefore coincide when the Jacobian is `I`. That is correct. The flag still has to change the Pendulum update, where the Jacobian is `phi(s)` and the ordinary update is `phi(s) * (phi(s)^T w)`.
+With the identity Jacobian the ordinary update and the natural-gradient update are the same step. The `natural_gradient` flag still selects the `copdac_q_natural` result folder.
 
 Do not multiply by an importance ratio.
-
-### COPDAC-Q, Pendulum
-
-`mu(s) = theta^T phi(s)` with `theta` of shape `(n, action_dim)`. Pendulum's action dimension is 1, so `theta` is `(n, 1)` and the Jacobian `grad_theta mu` is `phi(s)` reshaped to `(n, 1)`.
-
-```
-phi_sa = jacobian @ (a - mu)          # shape (n,)
-Q = dot(phi_sa, w) + dot(phi(s), v)
-delta = r + gamma * Q(next, mu(next)) * (1 - done) - Q
-w <- w + critic_lr * delta * phi_sa
-v <- v + critic_lr * delta * phi(s)
-```
-
-Actor, flag off: `theta <- theta + actor_lr * jacobian @ (jacobian.T @ w)`, with the product shaped so `theta` stays `(n, 1)`.
-Actor, flag on: `theta <- theta + actor_lr * w`, with `w` shaped like `theta`.
-
-`act` does not clip; the env wrapper does. If the agent clipped, `a - mu` would grow without bound once `mu` left `[-2, 2]`, and the compatible critic diverges (seen on Pendulum, 29 Oct). The critic learns `Q` of the clipped environment instead, which is flat outside the bounds.
-
-The advantage of `a = mu(s)` is zero. The bootstrap in the TD target uses `mu(next)`, not the behaviour action. This is the whole of the off-policy deterministic update.
 
 ### DDPG and TD3
 
@@ -207,7 +150,7 @@ Optimisers: Adam, learning rates from the config, created once in the constructo
 
 `plots/make_plots.py` takes a results directory and writes PNGs and one markdown or CSV table. It groups by agent and environment, aggregates seeds, and draws mean ± standard deviation. It never fills a missing seed with a zero. A missing seed is a gap in the table.
 
-Bandit y-axis is cost (lower is better). Gymnasium y-axis is return (higher is better). The axis label must say which.
+Bandit y-axis is cost (lower is better). LunarLander y-axis is return (higher is better). The axis label must say which.
 
 ## What not to do
 
@@ -225,7 +168,6 @@ Used when working T1.4.
 - `explore=False` adds no noise.
 - Bandit `eval_return` is the mean-action cost.
 - COPDAC and DDPG actor updates do not contain `pi / beta`.
-- OffPAC actor and critic both contain `rho`.
 - TD3 and DDPG differ only by the three flags and the resulting control flow.
 - `done` ignores time-limit truncation.
 - A seeded bandit rebuilds the same `C`.

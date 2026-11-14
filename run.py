@@ -22,11 +22,10 @@ import time
 
 import numpy as np
 
-ENV_CHOICES = ("bandit", "pendulum", "lunarlander")
+ENV_CHOICES = ("bandit", "lunarlander")
 AGENT_CHOICES = ("stochastic_ac", "offpac", "copdac_q", "ddpg", "td3")
 
 GYM_ENV_IDS = {
-    "pendulum": "Pendulum-v1",
     "lunarlander": "LunarLanderContinuous-v3",
 }
 

@@ -6,7 +6,6 @@ import pytest
 
 MODULES = [
     "envs.bandit",
-    "features.rbf",
     "common.seeding",
     "common.logging",
     "common.wrappers",
@@ -16,6 +15,7 @@ MODULES = [
     "agents.copdac_q",
     "agents.ddpg_td3",
     "plots.make_plots",
+    "plots.bandit_gradient_variance",
     "run",
 ]
 

@@ -1,0 +1,15 @@
+# Natural-gradient COPDAC-Q on the quadratic bandit, m = 50 (task T2.2).
+# Step size is the T2.1 choice in bandit_copdac_q_m50.yaml. On the bandit the
+# Jacobian is I, so the actor step matches ordinary COPDAC-Q. The flag only
+# selects the copdac_q_natural result folder. Critic is unchanged.
+agent: copdac_q
+env: bandit
+seed: 0            # overridden by --seed
+steps: 10000
+gamma: 0.99        # unused on the bandit (one-step cost)
+action_dim: 50
+eval_every: 100    # one evaluation per batch of 2m steps
+batch_size: 100    # critic least-squares refit every 2m steps
+actor_lr: 0.3
+sigma_beta: 0.1
+natural_gradient: true

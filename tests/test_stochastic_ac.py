@@ -1,13 +1,10 @@
-"""T1.1: Stochastic Actor-Critic on the bandit, plus the Gaussian scores and the
-incremental (Pendulum) TD updates from code.md.
-"""
+"""T1.1: Stochastic Actor-Critic on the bandit, plus the Gaussian scores from code.md."""
 
 import numpy as np
 import pytest
 
-from agents.stochastic_ac import StochasticActorCritic, make_stochastic_ac
+from agents.stochastic_ac import make_stochastic_ac
 from envs.bandit import QuadraticBandit
-from features.rbf import feature_dim, pendulum_phi
 
 
 def _run_bandit(agent, env, steps):
@@ -121,63 +118,14 @@ def test_critic_recovers_reward_linear_in_compatible_features():
     assert agent.baseline == pytest.approx(bias, abs=1e-7)
 
 
-# -- linear (Pendulum) mode ------------------------------------------------------
-def _linear_agent(**overrides):
-    n = feature_dim(5)
-    cfg = dict(actor_lr=0.01, critic_lr=0.1, seed=0, gamma=0.9, init_log_std=0.0)
-    cfg.update(overrides)
-    return StochasticActorCritic(
-        1, mode="linear",
-        feature_fn=lambda s: pendulum_phi(s, centres_per_dim=5), feature_dim=n, **cfg,
-    )
-
-
-def test_linear_update_matches_code_md():
-    agent = _linear_agent()
-    rng = np.random.default_rng(1)
-    agent.theta = rng.normal(size=agent.theta.shape) * 0.1
-    agent.v = rng.normal(size=agent.v.shape) * 0.1
-    th, v, y = agent.theta.copy(), agent.v.copy(), agent.y
-
-    s, s2 = np.array([0.6, 0.8, 1.0]), np.array([0.0, 1.0, -2.0])
-    a, r = np.array([0.7]), -3.0
-    phi, phi2 = pendulum_phi(s, 5), pendulum_phi(s2, 5)
-    mu = phi @ th
-    var = np.exp(2 * y)
-    grad_mu = (a - mu) / var
-    grad_y = float((a - mu) @ (a - mu)) / var - 1
-    delta = r + 0.9 * (phi2 @ v) - (phi @ v)
-
-    agent.update(s, a, r, s2, False)
-    np.testing.assert_allclose(agent.v, v + 0.1 * delta * phi)
-    np.testing.assert_allclose(agent.theta, th + 0.01 * delta * np.outer(phi, grad_mu))
-    assert agent.y == pytest.approx(y + 0.01 * delta * grad_y)
-
-
-def test_linear_done_drops_bootstrap():
-    a1, a2 = _linear_agent(), _linear_agent()
-    a1.v[:] = a2.v[:] = 1.0
-    s = np.array([1.0, 0.0, 0.0])
-    a1.update(s, np.array([0.0]), 0.0, s, True)
-    a2.update(s, np.array([0.0]), 0.0, s, False)
-    assert not np.allclose(a1.v, a2.v)
-
-
-def test_linear_explore_false_returns_mean():
-    agent = _linear_agent()
-    agent.theta = np.ones_like(agent.theta)
-    s = np.array([1.0, 0.0, 0.5])
-    expected = pendulum_phi(s, 5) @ agent.theta
-    np.testing.assert_array_equal(agent.act(s, explore=False), expected)
-
-
 # -- robustness / persistence ----------------------------------------------------
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
-def test_divergence_is_loud():
-    agent = _linear_agent()
+def test_nonfinite_reward_is_loud():
+    agent, _ = _bandit_agent(m=3)
     with pytest.raises(FloatingPointError):
-        agent.update(np.array([1.0, 0.0, 0.0]), np.array([0.0]), np.inf,
-                     np.array([1.0, 0.0, 0.0]), False)
+        for _ in range(agent.batch_size):
+            a = agent.act(None)
+            agent.update(None, a, np.inf, None, False)
 
 
 def test_runaway_but_finite_params_are_loud():
@@ -202,27 +150,6 @@ def test_save_load_roundtrip_bandit(tmp_path):
     assert fresh.y == pytest.approx(agent.y)
 
 
-def test_save_load_roundtrip_linear(tmp_path):
-    agent = _linear_agent()
-    agent.update(np.array([0.3, 0.9, 1.0]), np.array([0.2]), -1.0,
-                 np.array([0.1, 0.0, 0.5]), False)
-    path = str(tmp_path / "sac_linear.npz")
-    agent.save(path)
-    fresh = _linear_agent()
-    fresh.load(path)
-    np.testing.assert_array_equal(fresh.theta, agent.theta)
-    np.testing.assert_array_equal(fresh.v, agent.v)
-    assert fresh.y == pytest.approx(agent.y)
-
-
-def test_factory_builds_pendulum_linear_mode():
-    import gymnasium
-
-    from common.wrappers import ClipAction
-
-    env = ClipAction(gymnasium.make("Pendulum-v1"))
-    cfg = dict(actor_lr=0.001, critic_lr=0.01, seed=0, action_dim=1, centres_per_dim=5)
-    agent = make_stochastic_ac("pendulum", env, cfg)
-    assert agent.mode == "linear"
-    assert agent.theta.shape == (feature_dim(5), 1)
-    env.close()
+def test_factory_rejects_a_non_bandit_env():
+    with pytest.raises(ValueError):
+        make_stochastic_ac("lunarlander", None, {"action_dim": 2, "actor_lr": 0.01, "seed": 0})

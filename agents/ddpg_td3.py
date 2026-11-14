@@ -1,9 +1,8 @@
 """DDPG and TD3 -- one neural actor-critic class, TD3 as three flags.
 
-Phase 1 (DDPG, task T1.3) and Phase 2 (TD3 flags, task T2.5). DDPG sets twin,
-delayed actor updates, and target smoothing off; TD3 sets all three on. This
-module imports cleanly in Phase 0; the body is implemented later per spec.md
-1.5--1.6 and code.md.
+DDPG sets twin, delayed actor updates, and target smoothing off; TD3 sets all
+three on. This module imports cleanly; the agent body is not implemented yet
+(spec.md 1.4--1.5 and code.md, LunarLander task T3.4).
 """
 
 from __future__ import annotations

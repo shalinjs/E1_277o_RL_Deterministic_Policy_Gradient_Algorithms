@@ -1,27 +1,28 @@
 # Specification
 
 Deterministic Policy Gradient Algorithms — E1 277 Reinforcement Learning.
-Status: agreed from the 24 Oct 2026 project plan. Experiments freeze Thu 5 Nov 2026. Presentation Sun 15 Nov 2026.
+Status: agreed from the 24 Oct 2026 project plan, with the Pendulum experiment removed on 14 Nov 2026. Experiments freeze Thu 5 Nov 2026. Presentation Sun 15 Nov 2026.
 
 The story the experiments must be able to tell: each algorithm fixes a weakness of the previous one.
 
 1. Stochastic Actor-Critic (Gaussian) integrates over actions and gets worse as the action dimension grows.
 2. COPDAC-Q replaces that integral by the deterministic policy gradient. The gap should grow with dimension.
-3. DDPG keeps that gradient and replaces the linear critic and features by networks, a replay buffer, and target networks.
+3. DDPG keeps that gradient and replaces the linear critic by networks, a replay buffer, and target networks, on LunarLander.
 4. TD3 keeps DDPG and limits critic overestimation.
 
 ## 1. Algorithms in scope
 
-Three main algorithms and three add-ons. An add-on is built only after its owner's main algorithm passes the sanity check in section 6. If time slips, the add-on is dropped before the main algorithm. TD3 is the add-on that is kept longest.
+Three main algorithms and two add-ons. An add-on is built only after its owner's main algorithm passes the sanity check in section 6. If time slips, the add-on is dropped before the main algorithm. TD3 is the add-on that is kept longest.
 
 | Name | Owner | Kind | What it must show |
 | --- | --- | --- | --- |
 | Stochastic Actor-Critic (Gaussian) | A | main | On-policy Gaussian actor-critic. The baseline the 2014 paper beats on the bandit. |
-| OffPAC | A | add-on | Same features and Gaussian target, but data from a fixed-width behaviour policy, reweighted by importance sampling. Separates "off-policy" from "deterministic". |
-| COPDAC-Q | B | main | Off-policy deterministic actor-critic with a compatible linear critic. Silver et al. 2014, equations 19–22. |
-| Natural-gradient COPDAC | B | add-on | Same agent as COPDAC-Q. Actor update replaced by `theta <- theta + alpha_theta * w`. End of section 4.3. |
-| DDPG | C | main | Deterministic gradient with neural actor and critic. Lillicrap et al. 2016. |
-| TD3 | C | add-on | DDPG plus clipped double Q, delayed actor updates, and target-policy smoothing. Fujimoto et al. 2018. Implemented as flags on the DDPG agent, not a second codebase. |
+| COPDAC-Q | B | main | Off-policy deterministic actor-critic with a compatible linear critic. Silver et al. 2014, equations 19–22, in the bandit batch form of section 5.1. |
+| Natural-gradient COPDAC | B | add-on | Same agent as COPDAC-Q. Actor update replaced by `theta <- theta + alpha_theta * w`. End of section 4.3. On the bandit the Jacobian is the identity, so this step matches the ordinary update; the flag still writes a separate result folder. |
+| DDPG | C | main | Deterministic gradient with neural actor and critic. Lillicrap et al. 2016. LunarLander only. |
+| TD3 | C | add-on | DDPG plus clipped double Q, delayed actor updates, and target-policy smoothing. Fujimoto et al. 2018. Implemented as flags on the DDPG agent, not a second codebase. LunarLander only. |
+
+OffPAC is not in the experiment set. Its only planned run was removed with the Pendulum experiment on 14 Nov. `agents/offpac.py` stays an importable stub.
 
 Naming rule: the string "SAC" is forbidden in code, configs, plot legends, and filenames. The 2018 Soft Actor-Critic algorithm is not this project.
 
@@ -34,58 +35,21 @@ The 2014 paper writes `r_t = r(s_t, a_t)`. Gymnasium returns the reward after `s
 Bandit (paper section 5.1):
 
 - Policy `a ~ Normal(theta, exp(y))`, isotropic. Both the mean `theta` and the log-variance `y` are learned.
-- Critic is least squares from compatible features onto the observed costs, refit every batch of `2m` steps. Features are `grad_theta log pi` and `grad_y log pi`, plus a bias feature.
+- Critic is least squares from compatible features onto the observed rewards, refit every batch of `2m` steps. Features are `grad_theta log pi` and `grad_y log pi`, plus a bias feature.
 - Actor takes one update per batch.
 - A control with frozen variance is not required.
 
-Pendulum (paper section 5.2, linear features):
+### 1.3 COPDAC-Q
 
-- Mean `mu(s) = theta^T phi(s)`. Log standard deviation `log_std(s) = y^T phi(s)`.
-- Critic `V(s) = v^T phi(s)`, updated by TD(0).
-- Actor update uses the TD error as the advantage: step along `grad log pi(a|s) * delta`.
-- Initial standard deviation is about half the legal action range.
+Paper equations 19–22, reduced to the bandit protocol of section 5.1. Off-policy. No importance ratio on the actor or the critic.
 
-### 1.3 OffPAC
+Target `mu = theta`. Behaviour `a ~ Normal(theta, sigma_beta^2 I)`.
 
-Paper section 2.4 and the section 5.2 experimental setting. Degris, White, Sutton 2012, reduced as the 2014 paper reduces it.
+On the bandit the centred feature is `(a - theta)`, plus a bias feature, and the critic is least squares onto the observed rewards (`reward = -cost`), refit every `2m` steps, one actor step per batch. Regressing onto the cost would make `w` the cost gradient, and the actor would climb the cost.
 
-- Target policy is the same Gaussian family as Stochastic Actor-Critic.
-- Behaviour policy is the COPDAC behaviour: mean `mu_theta(s)` plus fixed-width Gaussian noise `sigma_beta`. On the bandit, `mu = theta`.
-- Importance ratio `rho = pi(a|s) / beta(a|s)`, applied to both actor and critic.
-- Critic `V(s) = v^T phi(s)`. The paper's OffPAC in section 5.2 uses gradient TD with `lambda = 0` and `alpha_u = 0`, which is ordinary off-policy TD(0). Implement that, not GTD2 and not emphatic TD.
-- Actor step is `rho * delta * grad log pi(a|s)`.
-- If `rho` produces NaN or enormous updates, clip it at 10 and record the clip in the config. Do not clip silently.
+Natural-gradient flag: the actor step is `theta <- theta + alpha_theta * w`. Default flag is off. With the identity Jacobian the ordinary update is the same step. The flag still selects the `copdac_q_natural` result folder.
 
-### 1.4 COPDAC-Q
-
-Paper equations 19–22. Off-policy. No importance ratio on the actor or the critic.
-
-Target `mu_theta(s) = theta^T phi(s)`. On the bandit, `phi` is the identity and `mu = theta`.
-Behaviour `a ~ Normal(mu_theta(s), sigma_beta^2 I)`.
-
-Compatible critic
-
-```
-Q(s, a) = (a - mu_theta(s))^T (grad_theta mu_theta(s))^T w  +  V(s)
-V(s) = v^T phi(s)
-```
-
-On the bandit the centred feature is `(a - theta)`, plus a bias feature, and the critic is least squares onto the costs, refit every `2m` steps, one actor step per batch. This matches section 5.1, where the critic is batch regression rather than the incremental update.
-
-On Pendulum use the incremental updates:
-
-```
-delta = r + gamma * Q(s', mu(s')) * (1 - done) - Q(s, a)
-theta <- theta + alpha_theta * grad_theta mu(s) * (grad_theta mu(s)^T w)
-w <- w + alpha_w * delta * phi(s, a)
-v <- v + alpha_v * delta * phi(s)
-```
-
-`done` is true only when the environment terminates, not when it truncates at a time limit. Bootstrapping through a time-limit cut is required.
-
-Natural-gradient flag: the actor line becomes `theta <- theta + alpha_theta * w`. Critic updates stay the same. Default flag is off.
-
-### 1.5 DDPG
+### 1.4 DDPG
 
 Deterministic actor `mu_theta(s)`, critic `Q_w(s, a)`.
 
@@ -98,7 +62,7 @@ Deterministic actor `mu_theta(s)`, critic `Q_w(s, a)`.
   `grad_theta mu(s) * grad_a Q_w(s, a)` evaluated at `a = mu_theta(s)`,
   averaged over the minibatch. Implemented as ascent on `Q_w(s, mu_theta(s))`, which is the same quantity.
 
-### 1.6 TD3
+### 1.5 TD3
 
 Same code path as DDPG. Three flags, all off for a DDPG run and all on for a TD3 run. Do not change any other hyperparameter between the two.
 
@@ -110,7 +74,7 @@ Optional diagnostic, not required for the sanity check: log the critic's predict
 
 ## 2. Environments
 
-Three environments. Each answers one question. Pendulum is the only place every algorithm is expected to meet.
+Two environments. Each answers one question.
 
 ### 2.1 Continuous quadratic bandit
 
@@ -124,16 +88,7 @@ Paper section 5.1. Member A builds it. Members A and B run it. DDPG on the bandi
 - What is scored: the cost of the mean action, not the cost of the exploratory action.
 - Question: does the deterministic update pull away from the stochastic one as `m` grows?
 
-### 2.2 Pendulum-v1
-
-Gymnasium. All six algorithms, except natural-gradient COPDAC is run here only if it helped on the bandit.
-
-- Torque clipped to `[-2, 2]`.
-- About 50,000 environment steps.
-- Discount used by the agents: 0.99.
-- Question: on a one-dimensional action, how do on-policy, off-policy, stochastic, deterministic, linear, and neural methods compare? A small gap between Stochastic Actor-Critic and COPDAC-Q is an expected result, not a bug. The paper's Figure 2 is the same observation.
-
-### 2.3 LunarLanderContinuous-v3
+### 2.2 LunarLanderContinuous-v3
 
 Gymnasium Box2D. DDPG and TD3 only.
 
@@ -157,14 +112,14 @@ Gymnasium Box2D. DDPG and TD3 only.
 | Replay capacity | 1,000,000 |
 | Target rate tau | 0.005 |
 | Exploration noise | Gaussian, standard deviation 0.1 times the max absolute action |
-| Warmup random actions | 10,000 (Pendulum: 1,000 to 5,000) |
+| Warmup random actions | 10,000 |
 | TD3 policy delay | 2 |
 | TD3 target noise / clip | 0.2 / 0.5 |
 
 ### Metrics
 
 - Learning curve: bandit cost, or episodic return, against environment steps. One curve per algorithm, mean and a standard-deviation band.
-- Sample efficiency: environment steps until Pendulum mean return exceeds −300, and until LunarLander mean return exceeds 200. If the threshold is never hit, say so. Do not invent a crossing.
+- Sample efficiency: environment steps until LunarLander mean return exceeds 200. If the threshold is never hit, say so. Do not invent a crossing.
 - Wall-clock seconds per run, from the log.
 - Stability: the seed spread. This is the comparison TD3 is for.
 - Optional, bandit: variance of 100 gradient estimates at a fixed parameter, Stochastic Actor-Critic against COPDAC-Q, as a picture of section 6.
@@ -185,8 +140,8 @@ python run.py --agent <name> --env <name> --seed <int> --steps <int> --config <y
 ```
 
 Agent names: `stochastic_ac`, `offpac`, `copdac_q`, `ddpg`, `td3`.
-Environment names: `bandit`, `pendulum`, `lunarlander`.
-Natural gradient is `agent: copdac_q` with `natural_gradient: true` in the config, not a sixth agent name. TD3 is a separate agent name so logs stay distinct, and it constructs the same class as DDPG with the three flags forced on.
+Environment names: `bandit`, `lunarlander`.
+Natural gradient is `agent: copdac_q` with `natural_gradient: true` in the config, not a separate agent name. TD3 is a separate agent name so logs stay distinct, and it constructs the same class as DDPG with the three flags forced on. `offpac` remains a name so old commands fail in the registry rather than silently mapping onto another agent; it has no training loop.
 
 One CSV per run, written only by the runner:
 
@@ -204,7 +159,6 @@ Configs live in `configs/` as YAML, one file per agent and environment that is a
 
 ```
 envs/bandit.py
-features/rbf.py
 agents/stochastic_ac.py
 agents/offpac.py
 agents/copdac_q.py
@@ -218,7 +172,7 @@ requirements.txt
 
 `requirements.txt` pins a working set for `numpy`, `torch`, `gymnasium[box2d]`, `matplotlib`, `pyyaml`. Plots and the results table are produced only by `plots/make_plots.py`.
 
-Pendulum features for the linear methods are RBFs on `(cos angle, sin angle, angular velocity)`, a grid of about 5 to 7 centres along each of the three inputs. Member B owns this function. Stochastic Actor-Critic and OffPAC on Pendulum call it. They do not invent a second feature map.
+The bandit policy mean is `theta` itself. There is no feature map.
 
 ## 6. Acceptance
 
@@ -227,33 +181,29 @@ An algorithm is done when its sanity check passes on one seed. The experiment is
 By Thu 29 Oct:
 
 - Stochastic Actor-Critic: on the bandit at `m = 10`, mean-action cost falls steadily and the mean moves toward 4.
-- COPDAC-Q: same bandit, cost falls faster than Stochastic Actor-Critic, mean moves toward 4.
-- DDPG: Pendulum return reaches about −200 or better within 50,000 steps. The environment's best return is 0.
-- TD3: the same Pendulum bar, with all three flags on.
+- COPDAC-Q: same bandit, the mean moves toward 4. The original bar also asked for a lower final cost than Stochastic Actor-Critic. On 14 Nov that bar was accepted as unmet at `m = 10` seed 0: COPDAC-Q 0.0011, Stochastic Actor-Critic 2.1e-5. The five-seed grid is the reason: COPDAC-Q wins at `m = 25` and `m = 50`.
 - Plot script: a learning curve with mean and standard-deviation band from two dummy CSVs.
 
 By Sun 1 Nov, if the main checks passed:
 
-- OffPAC and natural-gradient COPDAC each learn on at least one environment without diverging.
+- Natural-gradient COPDAC runs on the bandit grid without diverging.
 - Bandit curves exist for `m = 10, 25, 50`, five seeds, for Stochastic Actor-Critic, COPDAC-Q, and natural-gradient COPDAC.
 
-By Thu 5 Nov: final plots and the results table are generated by the script.
+By Thu 5 Nov: final plots and the results table are generated by the script. LunarLander is DDPG against TD3, five seeds, or fewer with a written reason that names the failed seed.
 
 ## 7. Risks already decided
 
 | What goes wrong | What to do |
 | --- | --- |
 | COPDAC-Q weights or Q become NaN | Drop the critic step size by 3 to 10 times. Mention COPDAC-GQ in the report. Do not implement COPDAC-GQ unless the spec is changed. |
-| Linear methods stay near −1200 on Pendulum after 50,000 steps | On Mon 2 Nov, drop them from Pendulum and keep the bandit. Write that decision into this spec. |
-| OffPAC ratios explode | Clip at 10 and record it, or run OffPAC only on Pendulum. |
 | LunarLander is too slow | Parallel seeds, or cut to 200,000 steps in the config. |
-| TD3 does not beat DDPG on Pendulum | Keep the result. Show seed spread and, if available, the Q-overestimation plot. LunarLander is where a gap is more likely. |
+| TD3 does not beat DDPG on LunarLander | Keep the result. Show seed spread and, if available, the Q-overestimation plot. |
 
 ## 8. Report boundaries
 
 These are not code tasks. They constrain what the logs must contain.
 
 - Slides: 10 slides, 15 minutes. One main plot on each results slide.
-- Backup slides, not counted in the 10: hyperparameter table, per-dimension bandit curves, TD3 ablation, OffPAC ratio statistics, compatible-critic derivation.
+- Backup slides, not counted in the 10: hyperparameter table, per-dimension bandit curves, compatible-critic derivation.
 - Theory slides carry at most one equation each. The report holds the derivations.
-- Report owners: A writes the introduction, B writes the 2014 theorem and the bandit results, C writes the experimental setup and leads the discussion, each member writes their own algorithm section, A and C share Pendulum and LunarLander results.
+- Report owners: A writes the introduction, B writes the 2014 theorem and the bandit results, C writes the experimental setup and leads the discussion, each member writes their own algorithm section, C writes the LunarLander results.

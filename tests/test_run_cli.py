@@ -71,10 +71,49 @@ def test_gym_environment_is_not_reset_during_construction(monkeypatch):
     assert base_env.action_space.seeds == [23]
 
 
-def test_pendulum_evaluation_runs_episodes(tmp_path):
-    cfg = dict(agent="copdac_q", env="pendulum", seed=0, actor_lr=1e-4, critic_lr=1e-3,
-               sigma_beta=1.0, centres_per_dim=5, eval_episodes=1)
-    env = run.make_env("pendulum", 0, cfg)
-    agent = run.make_agent("copdac_q", env, cfg)
-    score = run.make_evaluate_fn("pendulum", env, cfg)(agent)
-    assert np.isfinite(score) and -2000 < score <= 0  # one 200-step episode
+def test_lunarlander_evaluation_averages_episodes(monkeypatch):
+    import gymnasium
+
+    class ActionSpace:
+        low = np.array([-1.0, -1.0], dtype=np.float32)
+        high = np.array([1.0, 1.0], dtype=np.float32)
+        dtype = np.float32
+
+        def seed(self, seed):
+            self.seed_value = seed
+
+    class Environment:
+        def __init__(self):
+            self.action_space = ActionSpace()
+            self.observation_space = object()
+            self.steps = 0
+
+        def reset(self, **kwargs):
+            self.steps = 0
+            return np.zeros(8, dtype=np.float32), {}
+
+        def step(self, action):
+            self.steps += 1
+            done = self.steps >= 2
+            return np.zeros(8, dtype=np.float32), 1.5, done, False, {}
+
+    monkeypatch.setattr(gymnasium, "make", lambda _: Environment())
+
+    class Agent:
+        def act(self, state, explore=True):
+            return np.zeros(2, dtype=np.float32)
+
+    env = run.make_env("lunarlander", 0, {})
+    score = run.make_evaluate_fn(
+        "lunarlander", env, {"env": "lunarlander", "seed": 0, "eval_episodes": 2}
+    )(Agent())
+    assert score == pytest.approx(3.0)
+
+
+def test_removed_environment_is_rejected_by_the_parser():
+    assert run.ENV_CHOICES == ("bandit", "lunarlander")
+    with pytest.raises(SystemExit):
+        run.build_parser().parse_args(
+            ["--agent", "copdac_q", "--env", "pendulum", "--seed", "0",
+             "--steps", "10", "--config", "x"]
+        )
