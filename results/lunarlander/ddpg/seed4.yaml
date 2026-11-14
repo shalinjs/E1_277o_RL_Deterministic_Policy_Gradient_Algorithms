@@ -1,0 +1,18 @@
+agent: ddpg
+env: lunarlander
+environment_name: LunarLanderContinuous-v3
+seed: 4
+steps: 300000
+gamma: 0.99
+eval_every: 5000
+eval_episodes: 5
+actor_lr: 0.0003
+critic_lr: 0.0003
+tau: 0.005
+replay_capacity: 1000000
+batch_size: 256
+hidden_dims:
+- 256
+- 256
+exploration_std: 0.1
+warmup_steps: 10000

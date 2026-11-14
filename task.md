@@ -5,7 +5,7 @@ When you finish a task, check the box and add a one-line note: files touched, an
 
 Owners match `spec.md`. Shared tasks are labelled All. Do not start an add-on task before that owner's main sanity check is checked.
 
-Dates follow the 24 Oct 2026 plan. Phase 0 is done. The audit below is the tree at `378c2fd` (14 Nov), plus the same-day removal of the Pendulum experiment from the spec, the plan, this checklist, and the code.
+Dates follow the 24 Oct 2026 plan. Phase 0 is done. The audit below started from the tree at `c59fa57` (14 Nov). T3.4 through T4.2 are the working tree after that commit.
 
 ## Phase 0 — setup (25–26 Oct)
 
@@ -18,7 +18,7 @@ Dates follow the 24 Oct 2026 plan. Phase 0 is done. The audit below is the tree 
   Needs: T0.1.
   Done when: `python run.py --help` exits 0 and does not train.
   Done: `run.py`, `conftest.py`, packages `envs/ common/ agents/ plots/` (+ `__init__.py`), `configs/ results/` placeholders, `tests/test_imports.py`. `python run.py --help` lists `--agent --env --seed --steps --config` and exits 0.
-  Update (14 Nov): `make_agent` builds `copdac_q` and `stochastic_ac`. It still raises NotImplementedError for `offpac`, `ddpg`, and `td3`. `features/` was removed with the Pendulum experiment. Environment names are `bandit` and `lunarlander`. `pytest -q` -> 64 passed.
+  Update (14 Nov): `make_agent` builds `copdac_q`, `stochastic_ac`, `ddpg`, and `td3`. It still raises NotImplementedError for `offpac`. `features/` was removed with the Pendulum experiment. Environment names are `bandit` and `lunarlander`. Rechecked at `c59fa57`: `pytest -q` -> 70 passed. After the T3.4 agent landed: `pytest -q` -> 79 passed.
 
 - [x] **T0.3** A. Quadratic bandit. For a fixed seed, `C` and `a_star` are deterministic, cost matches a hand calculation at `a = 0` and at `a = a_star` (cost 0 at `a_star`).
   Needs: T0.2.
@@ -48,10 +48,10 @@ Dates follow the 24 Oct 2026 plan. Phase 0 is done. The audit below is the tree 
   Progress (29 Oct, reviewed 4 Nov): `agents/copdac_q.py` (identity-Jacobian bandit mode, natural-gradient flag), `tests/test_copdac_q.py`, `configs/bandit_copdac_q_m{10,25,50}.yaml` (seed-0 step-size sweep recorded); `run.py` wired for `copdac_q` and `stochastic_ac` (bandit mean-action eval; LunarLander eval on a separate env; CSV + resolved YAML; `tests/test_run_cli.py`). Contract fixes in `code.md`/`spec.md`: bandit critic regresses onto rewards (not costs), and the agent does not clip — the env wrapper does. Seed-0 final mean-action cost 0.0011 (m=10), mean theta -> 4.00, cost fell from ~159.
   Done (14 Nov, accepted by the project owner): at m=10 seed 0, COPDAC-Q's final cost (0.0011) is higher than Stochastic AC's (2.1e-5), and that result is accepted. The done-when's first clause is not met and is recorded as such. The second clause is met (mean theta -> 4.00). Accepted because the five-seed grid (T2.1) shows COPDAC-Q winning at m=25 (0.0140 vs 0.933) and m=50 (0.0576 vs 6.23). The done-when text is left unchanged so the unmet criterion stays visible.
 
-- [ ] **T1.4** All. Read another member's module against `code.md`. Note mismatches as unchecked bugs under this task. Fix only interface and logging mismatches, not their algorithm.
+- [x] **T1.4** All. Read another member's module against `code.md`. Note mismatches as unchecked bugs under this task. Fix only interface and logging mismatches, not their algorithm.
   Needs: T1.1, T1.2.
   Done when: Stochastic Actor-Critic, COPDAC-Q, and the DDPG/TD3 module have been read, and either no mismatch remains or a follow-up box has been added.
-  Note (14 Nov): open. `agents/stochastic_ac.py` and `agents/copdac_q.py` exist and are bandit-only. `agents/ddpg_td3.py` is still the flag stub, so the third module cannot be read against `code.md`.
+  Done (14 Nov): read `agents/stochastic_ac.py`, `agents/copdac_q.py`, and `agents/ddpg_td3.py` against `code.md`, including the review checklist. `explore=False` adds no noise. Bandit `eval_return` is the mean-action cost. COPDAC-Q and DDPG actor updates have no importance ratio. DDPG and TD3 are one class and differ by the three flags. The runner passes `done=terminated`. One interface mismatch: Stochastic Actor-Critic `save`/`load` omitted the critic weights. `agents/stochastic_ac.py` now stores `w_mu`, `w_y`, and `baseline` with `theta` and `log_std`. `tests/test_stochastic_ac.py` checks that round trip. No follow-up box: nothing else disagreed. DDPG still clips exploration noise after the squash, which is the DDPG rule in `code.md`; `explore=False` is the tanh-affine action. LunarLander configs spell replay size and width as `replay_capacity` and `hidden_dims`; the factory also accepts `buffer_size` and `hidden_size`, and the logged YAMLs were left as the runs wrote them.
 
 ## Phase 2 — bandit matrix and add-ons (30 Oct–1 Nov)
 
@@ -73,22 +73,24 @@ Dates follow the 24 Oct 2026 plan. Phase 0 is done. The audit below is the tree 
 
 ## Phase 3 — LunarLander (1–4 Nov)
 
-- [ ] **T3.4** C. LunarLander, DDPG against TD3, seeds 0–4, about 300,000 steps. If one run exceeds 1.5 hours, switch the config to 200,000 and say so.
+- [x] **T3.4** C. LunarLander, DDPG against TD3, seeds 0–4, about 300,000 steps. If one run exceeds 1.5 hours, switch the config to 200,000 and say so.
   Needs: T0.5.
   Done when: 10 CSVs exist, or fewer with a written reason that names the failed seed.
-  Progress (11 Nov, `da62413`, on behalf of sanjana2@iisc.ac.in): analysis and write-up only, not the 10 CSVs. `reports/ddpg_td3_lunarlander_research_findings.md` describes six 200,000-step evaluation runs (seeds 0–2 each; TD3 seed 2 is `comparison_seed2_rerun`, the interrupted seed-2 run is excluded). Reported mean final reward: TD3 64.68, DDPG −34.05. Scripts: `compare_ddpg_td3.py`, `analyze_td3_critics.py`, `analyze_td3_common_dataset.py`. Config: `configs/lunarlander_ddpg.yaml` (300,000 steps; TD3 noise and delay commented out). `pandas` added to `requirements.txt`. The evaluation CSVs, episode logs, checkpoints, and plots the report links under `results/lunarlander_ddpg_td3_comparison_3seeds_200k/` are not in the tree, and this repo still cannot train `ddpg` or `td3` (`agents/ddpg_td3.py` is the flag stub; `make_agent` raises NotImplementedError). Box left unchecked: five seeds were not run, the 200,000-step budget is not tied to a named run that exceeded 1.5 hours, and the fewer CSVs are not committed.
+  Progress (11 Nov, `da62413`, on behalf of sanjana2@iisc.ac.in): analysis and write-up only, not the 10 CSVs. `reports/ddpg_td3_lunarlander_research_findings.md` describes six 200,000-step evaluation runs (seeds 0–2 each; TD3 seed 2 is `comparison_seed2_rerun`, the interrupted seed-2 run is excluded). Reported mean final reward: TD3 64.68, DDPG −34.05. Scripts: `compare_ddpg_td3.py`, `analyze_td3_critics.py`, `analyze_td3_common_dataset.py`. Config: `configs/lunarlander_ddpg.yaml` (300,000 steps; TD3 noise and delay commented out). `pandas` added to `requirements.txt`.
+  Update (14 Nov, `c59fa57`): `results/lunarlander_ddpg_td3_comparison_3seeds_200k/comparison_plots/` is in the tree — four PNGs and `comparison_summary.csv`. That CSV's final rewards match the report: DDPG 140.39, −119.40, −123.16 (mean −34.05); TD3 −31.81, −25.14, 250.98 (mean 64.68), with TD3 seed 2 the rerun. The six evaluation CSVs, episode logs, and checkpoints the report names are still absent. Those files are not the spec seed logs.
+  Done (14 Nov): `agents/ddpg_td3.py` (one class; DDPG forces the three flags off, TD3 forces twin critics, `policy_delay=2`, and target smoothing on), `tests/test_ddpg_td3.py`, `configs/lunarlander_td3.yaml`, `run.py` builds both agents and writes episode logs for both. `plots/make_plots.py` reads `seed<k>.csv` only, so `seed<k>_episodes.csv` is not a learning curve. A 200-update timing of the 256-unit network was about 2 ms per step, so the configs stayed at 300,000. `python run.py --agent ddpg --env lunarlander --seed <0-4> --steps 300000 --config configs/lunarlander_ddpg.yaml` and the same command with `--agent td3` and `configs/lunarlander_td3.yaml` wrote 10 CSVs and sibling YAMLs at `results/lunarlander/{ddpg,td3}/seed{0..4}.csv`. Every `eval_return` is finite (60 rows, last step 300000). Longest run was TD3 seed 4 at 696.5 s, under 1.5 hours, so the step count was not cut to 200,000. Final eval return, seeds 0–4: DDPG 269.23, 68.05, −36.83, −113.61, 207.96 (mean 78.96 ± 160.82); TD3 272.50, 278.46, 46.29, 227.63, −13.87 (mean 162.21 ± 136.38). `make_plots` on `results/lunarlander` alone wrote `plots/out/lunarlander_learning_curve.png` (the full `python -m plots.make_plots` walk would also redraw the bandit PNGs, which were saved with `--log-y`). `pytest -q` -> 79 passed.
 
 ## Freeze (5 Nov)
 
-- [ ] **T4.1** All. `plots/make_plots.py` writes the learning curves and a results table (mean ± std, wall-clock, and threshold steps where defined). No hand-edited numbers.
+- [x] **T4.1** All. `plots/make_plots.py` writes the learning curves and a results table (mean ± std, wall-clock, and threshold steps where defined). No hand-edited numbers.
   Needs: T2.1, T3.4.
   Done when: the PNG files and the table are produced by one command recorded under this task.
-  Note (14 Nov): partial. `plots/make_plots.py` writes one PNG per environment and the three bandit curves are committed. It does not write the results table (mean ± std, wall-clock, threshold steps). Still needs T3.4.
+  Done (14 Nov): `plots/make_plots.py`, `tests/test_plots.py`. `python -m plots.make_plots --log-y --out-dir plots/out` wrote `plots/out/bandit_m{10,25,50}_learning_curve.png` (log cost axis), `plots/out/lunarlander_learning_curve.png` (linear return axis; `--log-y` does not log a curve that crosses zero), and `plots/out/results_table.md`. The table's std is the population std drawn on the curves. Every final cell has seeds 0–4. Threshold step, the first logged step where the five-seed mean return exceeds 200: DDPG `never`, TD3 `never` (final means 78.9588 and 162.205). Bandit rows say `not defined`. `plots/out/bandit_gradient_variance.png` is still from `plots/bandit_gradient_variance.py`. The linear-axis bandit copies in `plots/out_linear/` were not redrawn by this command. `pytest -q` -> 82 passed.
 
-- [ ] **T4.2** All. Every final run's YAML is next to its CSV. A reader can rerun one seed from the config alone.
+- [x] **T4.2** All. Every final run's YAML is next to its CSV. A reader can rerun one seed from the config alone.
   Needs: T4.1.
   Done when: a spot check of one bandit seed and one LunarLander seed matches the config paths.
-  Note (14 Nov): the bandit half holds — each of the 30 `seed*.csv` files has a sibling `seed*.yaml`. `configs/lunarlander_ddpg.yaml` has no result CSV beside it.
+  Done (14 Nov): every final `seed<k>.csv` has a sibling YAML — 45 bandit logs (COPDAC-Q, natural-gradient COPDAC, Stochastic AC, `m in {10, 25, 50}`, seeds 0–4) and 10 LunarLander logs (`results/lunarlander/{ddpg,td3}/seed{0..4}.csv`). Spot check, both passed through `results_paths`: `results/bandit_m25/copdac_q/seed2.yaml` matches `configs/bandit_copdac_q_m25.yaml` at seed 2, 10,000 steps, and resolves to that CSV; `results/lunarlander/td3/seed3.yaml` matches `configs/lunarlander_td3.yaml` at seed 3, 300,000 steps, and resolves to that CSV. `comparison_summary.csv` is still a three-seed summary, not one of these seed logs.
 
 ## Not tasks
 

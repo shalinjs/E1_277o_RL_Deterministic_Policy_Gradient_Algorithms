@@ -163,7 +163,14 @@ class StochasticActorCritic:
 
     # -- persistence -----------------------------------------------------------
     def save(self, path: str) -> None:
-        np.savez(path, theta=self.theta, log_std=np.array([self.y]))
+        np.savez(
+            path,
+            theta=self.theta,
+            log_std=np.array([self.y]),
+            w_mu=self.w_mu,
+            w_y=np.array([self.w_y]),
+            baseline=np.array([self.baseline]),
+        )
 
     def load(self, path: str) -> None:
         if not os.path.exists(path) and os.path.exists(path + ".npz"):
@@ -171,6 +178,9 @@ class StochasticActorCritic:
         data = np.load(path)
         self.theta = data["theta"].copy()
         self.y = self._clamp_y(float(data["log_std"][0]))
+        self.w_mu = data["w_mu"].copy()
+        self.w_y = float(data["w_y"][0])
+        self.baseline = float(data["baseline"][0])
 
 
 def make_stochastic_ac(env_name: str, env, config: dict) -> StochasticActorCritic:

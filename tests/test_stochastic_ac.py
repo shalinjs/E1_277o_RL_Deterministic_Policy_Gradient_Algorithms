@@ -147,7 +147,10 @@ def test_save_load_roundtrip_bandit(tmp_path):
     fresh, _ = _bandit_agent()
     fresh.load(path)
     np.testing.assert_array_equal(fresh.theta, agent.theta)
+    np.testing.assert_array_equal(fresh.w_mu, agent.w_mu)
     assert fresh.y == pytest.approx(agent.y)
+    assert fresh.w_y == pytest.approx(agent.w_y)
+    assert fresh.baseline == pytest.approx(agent.baseline)
 
 
 def test_factory_rejects_a_non_bandit_env():

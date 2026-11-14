@@ -45,7 +45,7 @@ def test_run_help_does_not_train(capsys):
 def test_make_agent_raises_for_unimplemented_agents():
     import run
 
-    # stochastic_ac and copdac_q are implemented; the neural agents are not yet.
-    for agent in ("ddpg", "td3", "offpac"):
+    # OffPAC is not scheduled. DDPG and TD3 are built by make_ddpg_td3.
+    for agent in ("offpac",):
         with pytest.raises(NotImplementedError):
             run.make_agent(agent, env=None, config={"env": "bandit"})

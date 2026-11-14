@@ -103,6 +103,10 @@ def make_agent(agent_name: str, env, config: dict):
         from agents.stochastic_ac import make_stochastic_ac
 
         return make_stochastic_ac(env_name, env, config)
+    if agent_name in ("ddpg", "td3"):
+        from agents.ddpg_td3 import make_ddpg_td3
+
+        return make_ddpg_td3(agent_name, env, config)
     raise NotImplementedError(f"agent '{agent_name}' is not implemented yet")
 
 
@@ -171,7 +175,7 @@ def main(argv=None, results_root: str = "results") -> int:
     start = time.perf_counter()
     episode_csv_path = os.path.splitext(csv_path)[0] + "_episodes.csv"
     with RunLogger(csv_path) as logger:
-        if args.agent == "ddpg":
+        if args.agent in ("ddpg", "td3"):
             with EpisodeLogger(episode_csv_path) as episode_logger:
                 run_training(
                     env,

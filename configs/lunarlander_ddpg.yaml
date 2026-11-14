@@ -1,5 +1,5 @@
-# TD3 on LunarLanderContinuous-v3. Override seed/steps through run.py arguments.
-## DDPG on LunarLanderContinuous-v3.
+# DDPG on LunarLanderContinuous-v3. Override seed and steps through run.py arguments.
+# The TD3 keys stay unset. The constructor forces twin critics, delay, and target smoothing off.
 agent: ddpg
 env: lunarlander
 environment_name: LunarLanderContinuous-v3
